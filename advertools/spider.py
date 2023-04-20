@@ -651,9 +651,7 @@ class SEOSitemapSpider(Spider):
                  css_selectors=None,
                  xpath_selectors=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        print(f"sid list before: {sid_list}")
         self.sid_list = json.loads(json.dumps(sid_list.split(',')))
-        print(f"sid list: {sid_list}")
         self.start_urls = json.loads(json.dumps(url_list.split(',')))
         self.allowed_domains = json.loads(json.dumps(allowed_domains.split(',')))
         self.follow_links = eval(json.loads(json.dumps(follow_links)))
@@ -983,15 +981,12 @@ def crawl(url_list, output_file, follow_links=False,
                '-a', 'css_selectors=' + str(css_selectors),
                '-a', 'xpath_selectors=' + str(xpath_selectors),
                '-o', output_file] + settings_list
-    print(f"DEF COMMAND: {command}")
     if len(','.join(url_list)) > MAX_CMD_LENGTH:
         split_urls = _split_long_urllist(url_list)
         split_sids = _split_long_urllist(split_sids)
-        print(f"DEF COMMAND: {command}")
         for u_list, s_list in zip(split_urls, split_sids):
             command[4] = 'url_list=' + ','.join(u_list)
             command[5] = 'sid_list=' + ','.join(s_list)
-            print(f"LOOP COMMAND: {command}")
             subprocess.run(command)
     else:
         subprocess.run(command)
