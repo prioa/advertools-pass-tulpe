@@ -642,7 +642,7 @@ class SEOSitemapSpider(Spider):
     }
 
 
-    def __init__(self, url_list, follow_links=False,
+    def __init__(self, url_list, sid_list=None, follow_links=False,
                  allowed_domains=None,
                  exclude_url_params=None,
                  include_url_params=None,
@@ -651,6 +651,9 @@ class SEOSitemapSpider(Spider):
                  css_selectors=None,
                  xpath_selectors=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        print(f"sid list before: {sid_list}")
+        self.sid_list = json.loads(json.dumps(sid_list.split(',')))
+        print(f"sid list: {sid_list}")
         self.start_urls = json.loads(json.dumps(url_list.split(',')))
         self.allowed_domains = json.loads(json.dumps(allowed_domains.split(',')))
         self.follow_links = eval(json.loads(json.dumps(follow_links)))
@@ -666,9 +669,11 @@ class SEOSitemapSpider(Spider):
         self.xpath_selectors = eval(json.loads(json.dumps(xpath_selectors)))
 
     def start_requests(self):
-        for url in self.start_urls:
+        for idx, url in enumerate(self.start_urls):
             try:
-                yield Request(url, callback=self.parse, errback=self.errback)
+                request = Request(url, callback=self.parse, errback=self.errback)
+                request.meta['sid'] = self.sid_list[idx] if idx < len(self.sid_list) else None
+                yield request
             except Exception as e:
                 self.logger.error(repr(e))
 
@@ -685,6 +690,8 @@ class SEOSitemapSpider(Spider):
         header_links = le_header.extract_links(response)
         footer_links = le_footer.extract_links(response)
         images = _extract_images(response)
+        id = response.meta.get('sid')
+
 
         if links:
             parsed_links = dict(
@@ -776,8 +783,8 @@ class SEOSitemapSpider(Spider):
             self.logger.exception(' '.join([str(e), str(response.status),
                                             response.url]))
         page_content = _extract_content(response, **tags_xpaths)
-
         yield dict(
+            SID=id,
             url=response.request.url,
             **page_content,
             **open_graph,
@@ -904,6 +911,20 @@ def crawl(url_list, output_file, follow_links=False,
     ...                          'author': '.contributorNameID::text',
     ...                          'author_url': '.contributorNameID::attr(href)'})
     """
+
+    def is_nested_list(lst):
+        for element in lst:
+            if isinstance(element, list):
+                return True
+        return False
+    if is_nested_list(url_list):
+        temp_url_list = []
+        sid_list = []
+        for inner_list in url_list:
+            temp_url_list.append(inner_list[1])
+            sid_list.append(str(inner_list[0]))
+        url_list = temp_url_list
+
     if isinstance(url_list, str):
         url_list = [url_list]
     if isinstance(allowed_domains, str):
@@ -952,6 +973,7 @@ def crawl(url_list, output_file, follow_links=False,
 
     command = ['scrapy', 'runspider', spider_path,
                '-a', 'url_list=' + ','.join(url_list),
+               '-a', 'sid_list=' + ','.join(sid_list),
                '-a', 'allowed_domains=' + ','.join(allowed_domains),
                '-a', 'follow_links=' + str(follow_links),
                '-a', 'exclude_url_params=' + str(exclude_url_params),
@@ -961,11 +983,15 @@ def crawl(url_list, output_file, follow_links=False,
                '-a', 'css_selectors=' + str(css_selectors),
                '-a', 'xpath_selectors=' + str(xpath_selectors),
                '-o', output_file] + settings_list
+    print(f"DEF COMMAND: {command}")
     if len(','.join(url_list)) > MAX_CMD_LENGTH:
         split_urls = _split_long_urllist(url_list)
-
-        for u_list in split_urls:
+        split_sids = _split_long_urllist(split_sids)
+        print(f"DEF COMMAND: {command}")
+        for u_list, s_list in zip(split_urls, split_sids):
             command[4] = 'url_list=' + ','.join(u_list)
+            command[5] = 'sid_list=' + ','.join(s_list)
+            print(f"LOOP COMMAND: {command}")
             subprocess.run(command)
     else:
         subprocess.run(command)
