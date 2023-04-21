@@ -103,15 +103,17 @@ class HeadersSpider(Spider):
         'HTTPERROR_ALLOW_ALL': True,
     }
 
-    def __init__(self, url_list=None, *args, **kwargs):
+    def __init__(self, url_list=None, sid_list=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.start_urls = json.loads(json.dumps(url_list.split(',')))
+        self.sid_list = json.loads(json.dumps(sid_list.split(',')))
 
     def start_requests(self):
-        for url in self.start_urls:
+        for idx, url in enumerate(self.start_urls):
             try:
-                yield Request(url, callback=self.parse, errback=self.errback,
-                              method='HEAD')
+                request =  Request(url, callback=self.parse, errback=self.errback, method='HEAD')
+                request.meta['sid'] = self.sid_list[idx] if idx < len(self.sid_list) else None
+                yield request
             except Exception as e:
                 self.logger.error(repr(e))
 
@@ -125,7 +127,9 @@ class HeadersSpider(Spider):
 
     def parse(self, response):
         now = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+        id = response.meta.get('sid')
         yield {
+            'sid': id,
             'url': response.url,
             'crawl_time': now,
             'status': response.status,
@@ -184,6 +188,20 @@ def crawl_headers(url_list, output_file,  custom_settings=None):
     >>> import pandas as pd
     >>> crawl_df = pd.read_json('output_file.jl', lines=True)
     """
+
+    def is_nested_list(lst):
+        for element in lst:
+            if isinstance(element, list):
+                return True
+        return False
+    if is_nested_list(url_list):
+        temp_url_list = []
+        sid_list = []
+        for inner_list in url_list:
+            temp_url_list.append(inner_list[1])
+            sid_list.append(str(inner_list[0]))
+        url_list = temp_url_list
+
     if isinstance(url_list, str):
         url_list = [url_list]
     if output_file.rsplit('.')[-1] != 'jl':
@@ -201,11 +219,15 @@ def crawl_headers(url_list, output_file,  custom_settings=None):
 
     command = ['scrapy', 'runspider', header_spider_path,
                '-a', 'url_list=' + ','.join(url_list),
+                '-a', 'sid_list=' + ','.join(sid_list),
                '-o', output_file] + settings_list
     if len(','.join(url_list)) > MAX_CMD_LENGTH:
         split_urls = _split_long_urllist(url_list)
-        for u_list in split_urls:
+        split_sids = _split_long_urllist(sid_list)
+
+        for u_list, s_list in zip(split_urls, split_sids):
             command[4] = 'url_list=' + ','.join(u_list)
+            command[5] = 'sid_list=' + ','.join(s_list)
             subprocess.run(command)
     else:
         subprocess.run(command)
