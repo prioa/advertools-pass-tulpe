@@ -983,10 +983,11 @@ def crawl(url_list, output_file, follow_links=False,
                '-o', output_file] + settings_list
     if len(','.join(url_list)) > MAX_CMD_LENGTH:
         split_urls = _split_long_urllist(url_list)
-        split_sids = _split_long_urllist(split_sids)
+        split_sids = _split_long_urllist(sid_list)
         for u_list, s_list in zip(split_urls, split_sids):
-            command[4] = 'url_list=' + ','.join(u_list)
-            command[5] = 'sid_list=' + ','.join(s_list)
+            command[5] = 'url_list=' + ','.join(u_list)
+            command[6] = 'sid_list=' + ','.join(s_list)
+            print(command)
             subprocess.run(command)
     else:
         subprocess.run(command)
