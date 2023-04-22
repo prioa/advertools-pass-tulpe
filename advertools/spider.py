@@ -678,7 +678,8 @@ class SEOSitemapSpider(Spider):
     def errback(self, failure):
         if not failure.check(scrapy.exceptions.IgnoreRequest):
             self.logger.error(repr(failure))
-            yield {'url': failure.request.url,
+            yield {'sid': failure.request.meta.get('sid'),
+                    'url': failure.request.url,
                    'crawl_time': datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
                    'errors': repr(failure)}
 
